@@ -75,7 +75,7 @@ provider "google-beta" {
 
 
 module "network" {
-  source = "git@gitlab.bluetab.net:terraform-bankia/modules/gcp-network.git?ref=v1.0.0"
+  source = "git@github.com:lucasberlang/gcp-network.git?ref=v1.0.0"
 
   project_id         = var.project_id
   description        = var.description
@@ -114,7 +114,7 @@ resource "google_storage_bucket" "gcs_starburst" {
 }
 
 module "gke-starburst" {
-  source = "git@gitlab.bluetab.net:terraform-bankia/modules/gcp-gke.git?ref=v1.2.0"
+  source = "git@github.com:lucasberlang/gcp-gke.git?ref=v1.1.0"
 
   project_id              = var.project_id
   name                    = "starburst"
@@ -170,6 +170,7 @@ module "gke-starburst" {
   dns_cache = var.dns_cache
   labels    = var.labels
 }
+
 ```
 
 The only important thing to note is that we are deploying a network with a single subnet and that the GKE cluster is enabled with auto-scaling so that we can increase the number of nodes when there is a workload. We also have to note that a label has been added to all nodes which is `"starburstpool" = "default-node-pool"` which we will make use of later in the Starburst deployment. Apart from these components, we also deployed a Cloud Storage to later configure the Hive connector.
