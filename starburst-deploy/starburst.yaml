@@ -1,0 +1,155 @@
+catalogs:
+  hive: |
+    connector.name=hive
+    hive.security=starburst
+    hive.metastore.uri=thrift://hive:9083
+    hive.gcs.json-key-file-path=/gcs-keyfile/key.json
+    hive.gcs.use-access-token=false
+  postgres: |
+    connector.name=postgresql
+    connection-url=jdbc:postgresql://postgresql:5432/insights
+    connection-user=
+    connection-password=
+  bigquery: |
+      connector.name=bigquery
+      bigquery.project-id=practica-cloud-286009
+      bigquery.credentials-file=/gcs-keyfile/key.json
+prometheus:
+  enabled: true
+  agent:
+    version: "0.16.1"
+    port: 8081
+    config: "/etc/starburst/telemetry/prometheus.yaml"
+  rules:
+    - pattern: trino.execution<name=QueryManager><>(running_queries|queued_queries)
+      name: $1
+      attrNameSnakeCase: true
+      type: GAUGE
+    - pattern: 'trino.execution<name=QueryManager><>FailedQueries\.TotalCount'
+      name: 'starburst_failed_queries'
+      type: COUNTER
+    - pattern: 'trino.execution<name=QueryManager><>(running_queries)'
+      name: 'starburst_running_queries'
+    - pattern: 'trino.execution<name=QueryManager><>StartedQueries\.FiveMinute\.Count'
+      name: 'starburst_started_queries'
+    - pattern: 'trino.execution<name=SqlTaskManager><>InputPositions\.FiveMinute\.Count'
+      name: 'starburst_input_rows'
+    - pattern: 'trino.execution<name=SqlTaskManager><>InputDataSize\.FiveMinute\.Count'
+      name: 'starburst_input_data_bytes'
+    - pattern: 'trino.execution<name=QueryManager><>UserErrorFailures\.FiveMinute\.Count'
+      name: 'starburst_failed_queries_user'
+    - pattern: 'trino.execution<name=QueryManager><>ExecutionTime\.FiveMinutes\.P50'
+      name: 'starburst_latency_p50'
+    - pattern: 'trino.execution<name=QueryManager><>WallInputBytesRate\.FiveMinutes\.P90'
+      name: 'starburst_latency_p90'
+    - pattern: 'trino.failuredetector<name=HeartbeatFailureDetector><>ActiveCount'
+      name: 'starburst_active_node'
+    - pattern: 'trino.memory<type=ClusterMemoryPool, name=general><>FreeDistributedBytes'
+      name: 'starburst_free_memory_pool'
+    - pattern: 'trino.memory<name=ClusterMemoryManager><>QueriesKilledDueToOutOfMemory'
+      name: 'starburst_queries_killed_due_to_out_of_memory'
+    - pattern: 'java.lang<type=Memory><HeapMemoryUsage>committed'
+      name: 'starburst_heap_size_usage'
+    - pattern: 'java.lang<type=Threading><>ThreadCount'
+      name: 'starburst_thread_count'
+coordinator:
+  envFrom:
+  - secretRef:
+      name: environment-vars
+  additionalProperties: |
+    starburst.data-product.enabled=${ENV:data_products_enabled}
+    data-product.starburst-jdbc-url=${ENV:data_products_jdbc_url}
+    data-product.starburst-user=${ENV:data_products_username}
+    data-product.starburst-password=
+    query.max-memory=1PB
+    starburst.access-control.enabled=${ENV:starburst_access_control_enabled}
+    starburst.access-control.authorized-users=${ENV:starburst_access_control_authorized_users}
+  etcFiles:
+    properties:
+      config.properties: |
+        coordinator=true
+        node-scheduler.include-coordinator=false
+        http-server.http.port=8080
+        discovery-server.enabled=true
+        discovery.uri=http://localhost:8080
+        usage-metrics.cluster-usage-resource.enabled=true
+        http-server.authentication.allow-insecure-over-http=true
+        web-ui.enabled=true
+        http-server.process-forwarded=true
+        insights.persistence-enabled=true
+        insights.metrics-persistence-enabled=true
+        insights.jdbc.url=${ENV:database_connection_url}
+        insights.jdbc.user=${ENV:database_username}
+        insights.jdbc.password=${ENV:database_password}
+      password-authenticator.properties: |
+        password-authenticator.name=file
+  nodeSelector:
+    starburstpool: default-node-pool
+  resources:
+    limits:
+      cpu: 2
+      memory: 12Gi
+    requests:
+      cpu: 2
+      memory: 12Gi
+
+expose:
+  type: clusterIp
+  ingress:
+    serviceName: starburst
+    servicePort: 8080
+    host: 
+    path: "/"
+    pathType: Prefix
+    tls:
+      enabled: true
+      secretName: tls-secret-starburst
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt
+
+registryCredentials:
+  enabled: true
+  password:
+  registry: harbor.starburstdata.net/starburstdata
+  username:
+
+starburstPlatformLicense: starburst
+
+userDatabase:
+  enabled: true
+  users:
+  - password:
+    username:
+
+worker:
+  envFrom:
+  - secretRef:
+      name: environment-vars
+  autoscaling:
+    enabled: true
+    maxReplicas: 10
+    minReplicas: 3
+    targetCPUUtilizationPercentage: 40
+  deploymentTerminationGracePeriodSeconds: 30
+  nodeSelector:
+    starburstpool: default-node-pool
+  resources:
+    limits:
+      cpu: 8
+      memory: 40Gi
+    requests:
+      cpu: 8
+      memory: 40Gi
+  starburstWorkerShutdownGracePeriodSeconds: 120
+  tolerations:
+    - key: "kubernetes.azure.com/scalesetpriority"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+additionalVolumes:
+  - path: /gcs-keyfile/key.json
+    subPath: key.json
+    volume:
+      configMap:
+        name: "sa-key"

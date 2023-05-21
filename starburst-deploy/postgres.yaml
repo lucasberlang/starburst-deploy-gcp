@@ -1,0 +1,20 @@
+fullnameOverride: postgresql
+
+global:
+  postgresql:
+    auth:
+      database: postgres
+      username:
+      postgresPassword:
+  storageClass: "standard"
+primary:
+  initdb:
+    scripts:
+      init.sql: |
+        create database hive;
+        create database ranger;
+        create database insights;
+        create database datacache;
+
+service:
+  type: ClusterIP
