@@ -827,6 +827,29 @@ In this test the most relevant thing is that we are going to write the data from
   <img src="./images/gcs-results.png" width="1000" title="hover text">
 </p>
 
+As a last test to see that everything is working correctly we are going to launch a query to federate different data from different sources, in our case we will federate data from the previous table that we have created in Google Cloud Storage called customer with a table called nation that we will create in the postgres that we have configured in our deployment and the region table that is in the tcph schema. This query can be found in the `federate.sql` file:
+
+```sql
+create schema postgres.logistic;
+create table postgres.logistic.nation as select * from tpch.sf1.nation;
+
+select
+  cst.name as CustomerName,
+  cst.address,
+  cst.phone,
+  cst.nationkey,
+  cst.acctbal as BookedOrders,
+  cst.mktsegment,
+  nat.name as Nation,
+  reg.name as Region
+from hive.datalake.customer as cst
+join postgres.logistic.nation as nat on nat.nationkey = cst.nationkey
+join tpch.sf1.region as reg on reg.regionkey = nat.regionkey
+where reg.regionkey = 1;
+```
+
+This type of queries is one of Starburst's strong points, being able to federate queries that are in different information silos without the need to migrate the data and being able to attack different Cloud or onpremise information.
+
 OK, once we have tested that both queries and writes in GCS work correctly we are going to run some performance tests to simulate users in parallel and see how our platform auto-scales. To do this we are going to configure jmeter for these tests. To do this we have had to configure the trino jdbc connector to send queries to our cluster. The users we are going to simulate are 20 users in parallel, each one launching a sequence of 5 queries. This means that there will be 20 queries in parallel at the same time which in a real scenario will simulate much more than 20 users as they normally don't all launch queries at the same time. The queries we are going to run are as follows:
 
 ```sql
